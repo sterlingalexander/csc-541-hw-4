@@ -10,42 +10,29 @@
 using std::cin;
 using std::cout;
 
-const int ROOT = 0;
-const int NODE_SIZE = 12;
+const int ROOT = 0;										// BST root node is always at offset zero
+const int NODE_SIZE = sizeof(int) + sizeof(long) * 2;	// node size, system independent
 
-// From class materials
-struct bst_node {
-	int key;
-	long lp;
-	long rp;
+struct qobj {			// queue object for printing
+	int key;			// record key
+	long lp;			// left pointer (offset)
+	long rp;			// right pointer (offset)
+	long offset;		// offset of record
+	qobj *prev;			// prev pointer
+	qobj *next;			// next pointer
 };
 
-struct offsets {
-	long parent;
-	long actual;
-};
-
-struct qobj {
-	int key;
-	long lp;
-	long rp;
-	long offset;
-	qobj *prev;
-	qobj *next;
-};
-
-long find(filereader &index, int record);
-int add(filereader &index, int to_insert);
-void writeKey(filereader &index, int key);
-void readNode(filereader &index, int &key, long &lp, long &rp);
-void readNode(filereader &index, qobj *read);
-long size(filereader &index);
-void print(filereader &index);
-void split(char lineinput[], string &command, int &key);
-void printQueue(qobj *head, qobj *tail, int count);
-void addQueue(qobj *insert, qobj *head, qobj *tail);
-void refillQueue(filereader &index, qobj *head, qobj *tail);
-void printQueue(qobj *head, qobj* tail);
+long find(filereader &index, int record);							// searches for target key
+int add(filereader &index, int to_insert);							// adds key to index
+void writeKey(filereader &index, int key);							// writes key to index
+void readNode(filereader &index, int &key, long &lp, long &rp);		// reads node from index
+void readNode(filereader &index, qobj *read);						// reads node from index
+long size(filereader &index);										// gets file size
+void print(filereader &index);										// prints current tree
+void split(char lineinput[], string &command, int &key);			// splits input commands
+void printQueue(qobj *head, qobj *tail, int count);					// prints current queue
+void addQueue(qobj *insert, qobj *head, qobj *tail);				// adds nodes to queue
+void refillQueue(filereader &index, qobj *head, qobj *tail);		// adds next tree level to queue
 
 void main(int argc, char* argv[])  {
 
@@ -64,46 +51,33 @@ void main(int argc, char* argv[])  {
 	LARGE_INTEGER tstart, tfinish, tdiff;	// Start time, Finish time, difference in time
 	double ttotal = 0;						// Total recorded time
 	int totalfinds = 0;						// Total number of times the find() routine is called
-	double telapsed = 0;
-	double resolution = 0;
+	double telapsed = 0;					// Accumulator for elapsed time
 
-/*	while ( lineinput != "test" )  {
-		cin.getline(lineinput, 25);
-		cout << "\t\t\t~~~~~~~~ " << lineinput << '\n';
-		split(lineinput, command, key);
-	}
-*/
 	while ( 1 )  {
-		cin.getline(lineinput, 25);
-		split(lineinput, command, key);
-		if ( command == "add" )  {
-			add(index, key);
+		cin.getline(lineinput, 25);			// get a line of input from cin
+		split(lineinput, command, key);		// split out the command and key if any
+		if ( command == "add" )  {			// if it was an add command
+			add(index, key);				// call add method with the key
 		}
-		else if ( command == "find" )  {
-			totalfinds++;
+		else if ( command == "find" )  {	// if it was a find command
+			totalfinds++;					// increment total finds
 			QueryPerformanceCounter(&tstart);						// get start time
 			find(index, key);										// perform the find
 			QueryPerformanceCounter(&tfinish);						// get the end time
 			tdiff.QuadPart = tfinish.QuadPart - tstart.QuadPart;	// get the time difference
-			telapsed = tdiff.QuadPart / (double) freq.QuadPart;	// convert to actual time
-			ttotal += telapsed;
-//			resolution = 1.0 / (double) freq.QuadPart;
-//			printf("Your performance counter ticks %I64u times per second\n", freq.QuadPart);
-//			printf("Resolution is %lf nanoseconds\n", resolution*1e9);
-//			printf("Code under test took %lf sec\n", elapsedTime);
+			telapsed = tdiff.QuadPart / (double) freq.QuadPart;		// convert to actual time
+			ttotal += telapsed;										// accumulate total time in find method
 		}
-		else if ( command == "print" )  {
-			print(index);
+		else if ( command == "print" )  {	// if it was a print commmand
+			print(index);					// call print method
 		}
-		else if ( command == "end" )  {
-			cout << '\n';
-			printf("Sum: %.6f\n", ttotal);
-//			cout << "Sum: " << ttotal << '\n';
-//			cout << "Avg: " << ttotal / totalfinds << '\n';
-			printf("Avg: %.6f\n", ttotal / totalfinds);
+		else if ( command == "end" )  {						// if it was an end command
+			cout << '\n';									// format output
+			printf("Sum: %.6f\n", ttotal);					// print total time for finds
+			printf("Avg: %.6f\n", ttotal / totalfinds);		// print average time for finds
 			exit(0);
 		}
-		else  {
+		else  {								// generic error handler for malformed input
 			cout << "An error occurred, THIS SHOULD NEVER HAPPEN WITH WELL FORMED INPUT.\n\nTERMINATING\n\n";
 			exit(1);
 		}
@@ -112,42 +86,42 @@ void main(int argc, char* argv[])  {
 
 int add(filereader &index, int to_insert)  {
 	
-	long eof_offset = size(index);
+	long eof_offset = size(index);				// get the offset for EOF
 
-	if ( eof_offset == 0 )  {
-		writeKey(index, to_insert);
+	if ( eof_offset == 0 )  {					// if the file is empty
+		writeKey(index, to_insert);				// write the key and return success value
 		return 1;
 	}
 
-	int key = 0;
-	long lp = 0;
-	long rp = 0;
-	index.seek(ROOT, BEGIN);
-	readNode(index, key, lp, rp);
+	int key = 0;								// initialize key
+	long lp = 0;								// initialize lp
+	long rp = 0;								// initialize rp
+	index.seek(ROOT, BEGIN);					// seek to beginning of file
+	readNode(index, key, lp, rp);				// read first record
 
 	while ( 1 ) {
-		if ( to_insert < key )  {
-			if ( lp < 0 ) {
-				index.seek(-8, CUR);
-				index.write_raw( (char*) &eof_offset, sizeof(long) );
-				writeKey(index, to_insert);
-				return 1;
+		if ( to_insert < key )  {				// if the new key is less than the key to insert
+			if ( lp < 0 ) {						// if there is not another node at the lp
+				index.seek(-8, CUR);			// seek to lp value
+				index.write_raw( (char*) &eof_offset, sizeof(long) );	// write the offset of the new key to be inserted
+				writeKey(index, to_insert);								// insert the new key
+				return 1;												// return success
 			}
-			else {
-				index.seek(lp, BEGIN);
-				readNode(index, key, lp, rp);
+			else {								// otherwise
+				index.seek(lp, BEGIN);			// seek to the node at the lp
+				readNode(index, key, lp, rp);	// read the node and repeat
 			}
 		}
-		else if ( to_insert > key )  {
-			if ( rp < 0 ) {
-				index.seek(-4, CUR);
-				index.write_raw( (char*) &eof_offset, sizeof(long) );
-				writeKey(index, to_insert);
-				return 1;
+		else if ( to_insert > key )  {			// if the new key is greater than the key to insert
+			if ( rp < 0 ) {						// if there is not another node at the rp
+				index.seek(-4, CUR);			// seek to the rp value
+				index.write_raw( (char*) &eof_offset, sizeof(long) );	// write the offset of the new key to be inserted
+				writeKey(index, to_insert);								// write the new key
+				return 1;												// return success
 			}
-			else {
-				index.seek(rp, BEGIN);
-				readNode(index, key, lp, rp);
+			else {								// otherwise
+				index.seek(rp, BEGIN);			// seek to the node at the rp
+				readNode(index, key, lp, rp);	// read the node and repeat
 			}
 		}
 	}
@@ -155,39 +129,35 @@ int add(filereader &index, int to_insert)  {
 
 long find(filereader &index, int target)  {
 
-//	cout << "IN FIND METHOD\n";
-
-	long offset = 0;
+	long offset = 0;					// initialize variables
 	int key = 0;
 	long lp = 0;
 	long rp = 0;
 
-	index.seek(ROOT, BEGIN);
+	index.seek(ROOT, BEGIN);			// seek to root node of file
 
 	while ( 1 ) {
-
-//		cout << "\t\t\t________------------>Now looking at offset " << index.offset() << "<------------________"<< '\n';
-		readNode(index, key, lp, rp);
-		index.seek(-NODE_SIZE, CUR);
-		if ( target < key )  {
-			if ( lp > 0) {
-			index.seek(lp, BEGIN);
+		readNode(index, key, lp, rp);	// read current node
+		index.seek(-NODE_SIZE, CUR);	// move back to current node position
+		if ( target < key )  {			// if the target is less than current node key
+			if ( lp > 0) {				// and there is a valid lp
+			index.seek(lp, BEGIN);		// seek to the lp and repeat
 			}
-			else  {
+			else  {						// otherwise the target does not exist, print and return failure offset
 				cout << "Record " << target << " does not exist.\n";
 				return -1;
 			}
 		}
-		else if ( target > key )  {
-			if ( rp > 0 ) {
-			index.seek(rp, BEGIN);
+		else if ( target > key )  {		// if the target is greater than current node key
+			if ( rp > 0 ) {				// and there is a valid rp
+			index.seek(rp, BEGIN);		// seek to the rp and repeat
 			}
-			else  {
+			else  {						// otherwise the target does not exist, print and return failure offset
 				cout << "Record " << target << " does not exist.\n";
 				return -1;
 			}
 		}
-		else  {
+		else  {							// this is the equals case, print and return offset
 			cout << "Record " << key << " exists.\n";
 			return index.offset();
 		}
@@ -195,79 +165,70 @@ long find(filereader &index, int target)  {
 }
 
 void readNode(filereader &index, int &key, long &lp, long &rp)  {
-	index.read_raw( (char*) &key, sizeof(int) );
-	index.read_raw( (char*) &lp, sizeof(long) );
-	index.read_raw( (char*) &rp, sizeof(long) );
+	index.read_raw( (char*) &key, sizeof(int) );	// read key
+	index.read_raw( (char*) &lp, sizeof(long) );	// read lp
+	index.read_raw( (char*) &rp, sizeof(long) );	// read rp
 }
 
 void readNode(filereader &index, qobj *read)  {
-	int offset = index.offset();
-	int key = 0;
-	long lp = 0;
-	long rp = 0;	
-	index.read_raw( (char*) &key, sizeof(int) );
-	index.read_raw( (char*) &lp, sizeof(long) );
-	index.read_raw( (char*) &rp, sizeof(long) );
+	int offset = index.offset();					// record offset
+	int key = 0;									// initialize key
+	long lp = 0;									// initialize lp
+	long rp = 0;									// initialize rp
+	index.read_raw( (char*) &key, sizeof(int) );	// read key
+	index.read_raw( (char*) &lp, sizeof(long) );	// read lp
+	index.read_raw( (char*) &rp, sizeof(long) );	// read rp
 
-	read->key = key;  read->lp = lp; read->rp = rp; read->offset = offset;
+	read->key = key;  read->lp = lp; read->rp = rp; read->offset = offset;	// set values of node to read values
 }
 
 void writeKey(filereader &index, int key)  {
 
-	long minusone = -1;
-	index.seek(0, END);
-	index.write_raw( (char*) &key, sizeof(int));
-	index.write_raw( (char*) &minusone, sizeof(long) );
-	index.write_raw( (char*) &minusone, sizeof(long) );
+	long minusone = -1;										// var to hold long -1 value
+	index.seek(0, END);										// seek to file end
+	index.write_raw( (char*) &key, sizeof(int));			// write key
+	index.write_raw( (char*) &minusone, sizeof(long) );		// write null offset
+	index.write_raw( (char*) &minusone, sizeof(long) );		// write null offset
 }
 
 long size(filereader &index)  {
 
-	index.seek(0, END);
-	return index.offset();
+	index.seek(0, END);			// seek to the end of the file
+	return index.offset();		// get the offset (file size)
 }
 
 void print(filereader &index)  {
 
-	qobj *head = new qobj;
-	qobj *tail = new qobj;
-	qobj *curr = new qobj;
-	qobj *left = NULL;
-	qobj *right = NULL;
-	head->prev = NULL;
-	head->next = tail;
-	tail->next = NULL;
-	tail->prev = head;
-	index.seek(ROOT, BEGIN);
-	int count = 0;
+	qobj *head = new qobj;		// create head node
+	qobj *tail = new qobj;		// create tail node
+	qobj *curr = new qobj;		// create current node
+	qobj *left = NULL;			// create pointer for left offset
+	qobj *right = NULL;			// create pointer for right offset
+	head->prev = NULL;			// head anchor previous is null
+	head->next = tail;			// head anchor next is tail
+	tail->next = NULL;			// tail anchor next is null
+	tail->prev = head;			// tail anchor prev is head
+	index.seek(ROOT, BEGIN);	// seek to the tree root
+	int count = 0;				// var for tree level
 
-	readNode(index, curr);  // prime the queue
-	addQueue(curr, head, tail);
-	cout << "\n";
+	readNode(index, curr);		// prime the queue
+	addQueue(curr, head, tail);	// add root node to queue
+	cout << "\n";				// formatting output
 
-	while ( head->next != tail )  {
-		count ++;
-		printQueue(head, tail, count);
-		refillQueue(index, head, tail);
-	}
-}
-
-void printQueue(qobj *head, qobj* tail)  {
-	
-	qobj *curr = head->next;
-	while (curr != tail)  {
-		cout << curr->key << " " << curr->offset << "\n";
-		curr = curr->next;
+	while ( head->next != tail )  {			// while the queue is not empty
+		count ++;							// set the new level
+		printQueue(head, tail, count);		// print the queue
+		refillQueue(index, head, tail);		// refill the queue with the next level
 	}
 }
 
 void refillQueue(filereader &index, qobj *head, qobj *tail)  {
 
-	qobj *mark = tail->prev;
-	qobj *curr = head->next;
-	qobj *left = new qobj;
-	qobj *right = new qobj;
-	qobj *delptr = NULL;
+	qobj *mark = tail->prev;				// marker for "end of tree level" node
+	qobj *curr = head->next;				// current pointer
+	qobj *left = new qobj;					// new qobj for left child node
+	qobj *right = new qobj;					// new qobj for right child node
+	qobj *delptr = NULL;					// pointer for objects to delete
 
 	do  {		// while our current pointer is not beyond our marker for this level
 		if (curr->lp >= 0)  {
@@ -293,62 +254,54 @@ void refillQueue(filereader &index, qobj *head, qobj *tail)  {
 
 void printQueue(qobj *head, qobj *tail, int count)  {
 
-	qobj *curr = head->next;
+	qobj *curr = head->next;								// current pointer in queue
 
-	cout << count << ": ";
-	while ( curr != tail )  {
-		cout << curr->key << "/" << curr->offset << " ";
-		curr = curr->next;
+	cout << count << ": ";									// formatting output
+	while ( curr != tail )  {								// while we are not at the queue end
+		cout << curr->key << "/" << curr->offset << " ";	// print queue values
+		curr = curr->next;									// move to next node
 	}
-	cout << '\n';
+	cout << '\n';											// formatting output
 }
 
 void addQueue(qobj *insert, qobj *head, qobj *tail)  {
 
-	qobj *prev = tail->prev;
-	insert->next = tail;
-	insert->prev = tail->prev;
-	tail->prev = insert;
-	if (head->next == tail)  
-		head->next = insert;
+	qobj *prev = tail->prev;		// temp pointer to prev node
+	insert->next = tail;			// set inserted nodes next pointer
+	insert->prev = tail->prev;		// set inserted nodes prev pointer
+	tail->prev = insert;			// set tail anchor prev pointer
+	if (head->next == tail)			// if the queue was empty
+		head->next = insert;		// set the head appropriately
 	else
-		prev->next = insert;
+		prev->next = insert;		// otherwise, set next pointer of prev node to new node
 }
 
 void split(char lineinput[], string &command, int &key)  {
 
-//	cout << "ECHO:  " << lineinput << '\n';
-
-	int delim = 0;
-	string tmp = "";
-	command = "";
-	long size;
+	int delim = 0;			// index of delimiter
+	string tmp = "";		// temp string
+	command = "";			// clear command string
+	long size;				// size of string, counts while iterating
 
 	for (size = 0; size < lineinput[size] != '\0'; size++)  {	// iterate string
-//		cout << "Now parsing lineinput[" << size << "], which is valued at ==> " << lineinput[size] << '\n';
 		if ( lineinput[size] == ' ')  {				// find delimiters
-			delim = size;
-//			cout << "\t\t=======> DELIMITER at " << size << '\n';
+			delim = size;							// set delimiter position
 		}
 	}
 
-	if (delim == 0 )  {
-//		cout << "\t\t====================>No DELIMITER\n";
+	if (delim == 0 )  {			// we have a command with no space, no key to add
 		for (int j = 0; lineinput[j] != '\0'; j++)  {
-			command += lineinput[j];
+			command += lineinput[j];		// copy command to command variable
 		}
-		key = 0;
-		return;
+		key = 0;							// set key to nonsense value
+		return;								
 	}
 
-	for ( int j = 0; j < delim; j++ )  {
+	for ( int j = 0; j < delim; j++ )  {			// otherwise, parse command
 		command += lineinput[j];
 	}
-	for ( int j = delim + 1; j < size; j++ )  {
+	for ( int j = delim + 1; j < size; j++ )  {		// them parse key
 		tmp += lineinput[j];
 	}
-	key = atoi(tmp);
-
-//	cout << "Parsed command ==> " << command << '\n';
-//	cout << "Parsed key ===> " << key << '\n';
+	key = atoi(tmp);								// convert key from string to int
 }
