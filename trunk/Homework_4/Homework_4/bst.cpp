@@ -1,6 +1,3 @@
-// Homework4.cpp : Defines the entry point for the console application.
-//
-
 #define WIN_32_LEAN_AND_MEAN
 #include <windows.h>
 #include "filereader.h"
