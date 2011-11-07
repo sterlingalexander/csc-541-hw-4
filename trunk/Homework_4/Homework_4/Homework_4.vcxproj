@@ -65,7 +65,7 @@
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="filereader.cpp" />
-    <ClCompile Include="Homework4.cpp" />
+    <ClCompile Include="bst.cpp" />
     <ClCompile Include="str.cpp" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

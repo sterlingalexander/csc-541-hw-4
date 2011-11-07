@@ -294,7 +294,7 @@ void split(char lineinput[], string &command, int &key)  {
 			command += lineinput[j];		// copy command to command variable
 		}
 		key = 0;							// set key to nonsense value
-		return;								
+		return;
 	}
 
 	for ( int j = 0; j < delim; j++ )  {			// otherwise, parse command
