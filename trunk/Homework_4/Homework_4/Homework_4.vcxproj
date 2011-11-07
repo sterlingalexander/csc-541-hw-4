@@ -64,7 +64,6 @@
     <ClInclude Include="str.h" />
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="btree.cpp" />
     <ClCompile Include="filereader.cpp" />
     <ClCompile Include="bst.cpp" />
     <ClCompile Include="str.cpp" />
