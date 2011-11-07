@@ -59,6 +59,13 @@ void main(int argc, char* argv[])  {
 	index.open(fname, 'w');					// Open file to truncate
 	index.close();							// Close opened file
 	index.open(fname, 'x');					// Open file in RW mode
+	LARGE_INTEGER freq;						// Var for clock frequency
+	QueryPerformanceFrequency(&freq);		// get clock frequency to convert HPT to seconds
+	LARGE_INTEGER tstart, tfinish, tdiff;	// Start time, Finish time, difference in time
+	double ttotal = 0;						// Total recorded time
+	int totalfinds = 0;						// Total number of times the find() routine is called
+	double telapsed = 0;
+	double resolution = 0;
 
 /*	while ( lineinput != "test" )  {
 		cin.getline(lineinput, 25);
@@ -70,17 +77,30 @@ void main(int argc, char* argv[])  {
 		cin.getline(lineinput, 25);
 		split(lineinput, command, key);
 		if ( command == "add" )  {
-//			cout << "ECHO:  " << key << '\n';
 			add(index, key);
 		}
 		else if ( command == "find" )  {
-//			cout << "ECHO:  " << key << '\n';
-			find(index, key);
+			totalfinds++;
+			QueryPerformanceCounter(&tstart);						// get start time
+			find(index, key);										// perform the find
+			QueryPerformanceCounter(&tfinish);						// get the end time
+			tdiff.QuadPart = tfinish.QuadPart - tstart.QuadPart;	// get the time difference
+			telapsed = tdiff.QuadPart / (double) freq.QuadPart;	// convert to actual time
+			ttotal += telapsed;
+//			resolution = 1.0 / (double) freq.QuadPart;
+//			printf("Your performance counter ticks %I64u times per second\n", freq.QuadPart);
+//			printf("Resolution is %lf nanoseconds\n", resolution*1e9);
+//			printf("Code under test took %lf sec\n", elapsedTime);
 		}
 		else if ( command == "print" )  {
 			print(index);
 		}
 		else if ( command == "end" )  {
+			cout << '\n';
+			printf("Sum: %.6f\n", ttotal);
+//			cout << "Sum: " << ttotal << '\n';
+//			cout << "Avg: " << ttotal / totalfinds << '\n';
+			printf("Avg: %.6f\n", ttotal / totalfinds);
 			exit(0);
 		}
 		else  {
@@ -136,7 +156,7 @@ int add(filereader &index, int to_insert)  {
 long find(filereader &index, int target)  {
 
 //	cout << "IN FIND METHOD\n";
-//	bst_node node;
+
 	long offset = 0;
 	int key = 0;
 	long lp = 0;
