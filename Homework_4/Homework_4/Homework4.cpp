@@ -13,14 +13,6 @@ using std::cout;
 const int ROOT = 0;
 const int NODE_SIZE = 12;
 
-long find(filereader &index, int record);
-int add(filereader &index, int to_insert);
-void writeKey(filereader &index, int key);
-void readNode(filereader &index, int &key, long &lp, long &rp);
-long size(filereader &index);
-void print(filereader &index);
-void split(char lineinput[], string &command, int &key);
-
 // From class materials
 struct bst_node {
 	int key;
@@ -32,6 +24,28 @@ struct offsets {
 	long parent;
 	long actual;
 };
+
+struct qobj {
+	int key;
+	long lp;
+	long rp;
+	long offset;
+	qobj *prev;
+	qobj *next;
+};
+
+long find(filereader &index, int record);
+int add(filereader &index, int to_insert);
+void writeKey(filereader &index, int key);
+void readNode(filereader &index, int &key, long &lp, long &rp);
+void readNode(filereader &index, qobj *read);
+long size(filereader &index);
+void print(filereader &index);
+void split(char lineinput[], string &command, int &key);
+void printQueue(qobj *head, qobj *tail, int count);
+void addQueue(qobj *insert, qobj *head, qobj *tail);
+void refillQueue(filereader &index, qobj *head, qobj *tail);
+void printQueue(qobj *head, qobj* tail);
 
 void main(int argc, char* argv[])  {
 
@@ -161,10 +175,21 @@ long find(filereader &index, int target)  {
 }
 
 void readNode(filereader &index, int &key, long &lp, long &rp)  {
-
 	index.read_raw( (char*) &key, sizeof(int) );
 	index.read_raw( (char*) &lp, sizeof(long) );
 	index.read_raw( (char*) &rp, sizeof(long) );
+}
+
+void readNode(filereader &index, qobj *read)  {
+	int offset = index.offset();
+	int key = 0;
+	long lp = 0;
+	long rp = 0;	
+	index.read_raw( (char*) &key, sizeof(int) );
+	index.read_raw( (char*) &lp, sizeof(long) );
+	index.read_raw( (char*) &rp, sizeof(long) );
+
+	read->key = key;  read->lp = lp; read->rp = rp; read->offset = offset;
 }
 
 void writeKey(filereader &index, int key)  {
@@ -184,7 +209,90 @@ long size(filereader &index)  {
 
 void print(filereader &index)  {
 
-	cout << "METHOD STUB\n\n";
+	qobj *head = new qobj;
+	qobj *tail = new qobj;
+	qobj *curr = new qobj;
+	qobj *left = NULL;
+	qobj *right = NULL;
+	head->prev = NULL;
+	head->next = tail;
+	tail->next = NULL;
+	tail->prev = head;
+	index.seek(ROOT, BEGIN);
+	int count = 0;
+
+	readNode(index, curr);  // prime the queue
+	addQueue(curr, head, tail);
+	cout << "\n";
+
+	while ( head->next != tail )  {
+		count ++;
+		printQueue(head, tail, count);
+		refillQueue(index, head, tail);
+	}
+}
+
+void printQueue(qobj *head, qobj* tail)  {
+	
+	qobj *curr = head->next;
+	while (curr != tail)  {
+		cout << curr->key << " " << curr->offset << "\n";
+		curr = curr->next;
+	}
+}
+
+void refillQueue(filereader &index, qobj *head, qobj *tail)  {
+
+	qobj *mark = tail->prev;
+	qobj *curr = head->next;
+	qobj *left = new qobj;
+	qobj *right = new qobj;
+	qobj *delptr = NULL;
+
+	do  {		// while our current pointer is not beyond our marker for this level
+		if (curr->lp >= 0)  {
+			index.seek(curr->lp, BEGIN);	// seek to left object position
+			readNode(index, left);			// read information for left object
+			addQueue(left,head, tail);
+		}
+		if (curr->rp >= 0)  {
+			index.seek(curr->rp, BEGIN);	// seek to right object position
+			readNode(index, right);			// read information for right object
+			addQueue(right, head, tail);	// add right object to queue
+		}
+//		printQueue(head, tail);
+		delptr = curr;					// get a pointer to object to delete
+		head->next = curr->next;		// reset head to new next node
+		curr = curr->next;				// move current node pointer
+		if (delptr != mark)
+			delete delptr;				// delete removed object
+		left = new qobj;				// craete new objects to insert
+		right = new qobj;				// create new objects to insert
+	} while ( curr != mark->next );
+}
+
+void printQueue(qobj *head, qobj *tail, int count)  {
+
+	qobj *curr = head->next;
+
+	cout << count << ": ";
+	while ( curr != tail )  {
+		cout << curr->key << "/" << curr->offset << " ";
+		curr = curr->next;
+	}
+	cout << '\n';
+}
+
+void addQueue(qobj *insert, qobj *head, qobj *tail)  {
+
+	qobj *prev = tail->prev;
+	insert->next = tail;
+	insert->prev = tail->prev;
+	tail->prev = insert;
+	if (head->next == tail)  
+		head->next = insert;
+	else
+		prev->next = insert;
 }
 
 void split(char lineinput[], string &command, int &key)  {
@@ -194,7 +302,7 @@ void split(char lineinput[], string &command, int &key)  {
 	int delim = 0;
 	string tmp = "";
 	command = "";
-	int size;
+	long size;
 
 	for (size = 0; size < lineinput[size] != '\0'; size++)  {	// iterate string
 //		cout << "Now parsing lineinput[" << size << "], which is valued at ==> " << lineinput[size] << '\n';
